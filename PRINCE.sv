@@ -8,14 +8,14 @@
 module PRINCE #
     (
     parameter CIPHER_WIDTH      = 64, 				   // PRINCE is a 64-bit block cipher
-    parameter CIPHER_LATENCY    = 5                    // the # of pipeline stages
+    parameter CIPHER_LATENCY    = 5                    // the # of pipeline stages, must be odd
     )   
     (
     input                       sys_rst,                // Common port for all controllers
     input                       clk,
-    input                       CIPHER_GEN_EN,
+    input                       PRINCE_EN,				// keep working if this is high
     input [CIPHER_WIDTH-1:0]    KEY, 
-    input [CIPHER_WIDTH-1:0]    IV,
+    input [CIPHER_WIDTH-1:0]    PRINCE_IV,
     input [CIPHER_WIDTH-1:0]    PLAIN_TEXT,             // To leave blank for CNT/GCM mode
 
     output [CIPHER_WIDTH-1:0]   CIPHER_TEXT             // Last stage of CIPHER Gen pipeline
@@ -32,9 +32,11 @@ module PRINCE #
 //
 // PRINCE_core: full 12 rounds
 //      (^ K1 ^ RC0) 	-> R1 -> R2 -> R3 -> R4 -> R5 
-//              		-> S -> M' -> S_inv 
+//              		-> S -> M' -> S_inv 			
 //                  	-> R6 -> R7 -> R8 -> R9 -> R10 
 //														-> (^ RC11 ^ K1)
+//		S -> M' -> S_inv can be 1 or 2 rounds, here we use 1 round
+//
 //
 //	Reduced version of 5 rounds
 //		(^ K1 ^ RC0) 	-> R1 -> R2 -> S -> M' -> S_inv -> (^ RC11 ^ K1)
@@ -132,7 +134,7 @@ parameter [63:0] RC [0:11] = 	{
 
 
 // ..................... SBOX ........................... //
-parameter [3:0] SBOX [0:4] = 	{	
+parameter [3:0] SBOX [0:3] = 	{	
 									4'hB, 	// 0
 									4'hF, 	// 1
 									4'h3,  	// 2
@@ -151,7 +153,7 @@ parameter [3:0] SBOX [0:4] = 	{
 									4'h4 	// F
 								};
 
-parameter [3:0] SBOX_INV [0:4] = {	
+parameter [3:0] SBOX_INV [0:3] = {	
 									4'hB, 	// 0
 									4'h7, 	// 1
 									4'h3,  	// 2
@@ -176,8 +178,65 @@ parameter [3:0] SBOX_INV [0:4] = {
 
 
 
-
+// Pipeline registers
 reg [CIPHER_WIDTH-1:0] CIPHER_STATE [0:CIPHER_LATENCY-1];
+
+
+// Input to PRINCE core
+wire [CIPHER_WIDTH-1:0]	KEY_WHITEN;
+assign KEY_WHITEN = IV ^ RC[0] ^ K1;
+
+// Final cipher output
+assign CIPHER_TEXT = CIPHER_STATE[CIPHER_LATENCY-1] ^ RC[11] ^ K1;
+
+
+// Parameterizable PRINCE cipher gen
+genvar STAGE;
+
+generate 
+    for (STAGE = 0; STAGE <= CIPHER_LATENCY - 1; STAGE = STAGE + 1)
+    begin
+        always @ (posedge clk)
+        begin
+            if (sys_rst)
+                CIPHER_STATE[STAGE] <= 0;
+            
+            //else if (CIPHER_GEN_ON)    // If CIPHER gen is supposed to keep working
+            else if (PRINCE_EN)
+            begin
+            	if ((STAGE < ((CIPHER_LATENCY-1) >> 1)) && STAGE >= 0)		// The forward stages		
+            	begin
+            		if (STATE == 0) // RC0 taking IV as the input
+            			CIPHER_STATE[STAGE] <= ;
+
+            		else 
+            			CIPHER_STATE[STAGE] <= ;
+            	end 
+
+            	if (STAGE == ((CIPHER_LATENCY-1) >> 1))						// The middle stage
+            	begin
+            		CIPHER_STATE[STAGE] <= ;
+            	end 
+
+
+            	if (STAGE > ((CIPHER_LATENCY-1) >> 1))						// The reverse stages
+            	begin
+            		CIPHER_STATE[STAGE] <= ;
+            	end 
+            end 
+                
+            else
+            begin
+            	CIPHER_STATE[STAGE] <= 0;
+            end 
+            
+        end // always
+    end // generate for
+endgenerate
+
+
+
+
 
 
 
