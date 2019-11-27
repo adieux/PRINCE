@@ -212,20 +212,27 @@ assign CIPHER_TEXT = CIPHER_STATE[CIPHER_LATENCY-1] ^ RC[11] ^ K1;
 
 
 // M'
-// Rows that consists m0, m1, m2, m3
-parameter [3:0] m_row [0:3] = {	
-			4'b0111,
-			4'b1011,
-			4'b1101,
-			4'b1110
-		};
-
 // Which m does not participate in computation
 parameter [3:0] MISS [0:15] = {
-								4'h0, 4'h1, 4'h2, 4'h3,
-								4'h3, 4'h0, 4'h1, 4'h2,
-								4'h2, 4'h3, 4'h0, 4'h1,
-								4'h1, 4'h2, 4'h3, 4'h0
+								4'b0111,
+								4'b1011,
+								4'b1101,
+								4'b1110,
+
+								4'b1110,
+								4'b0111,
+								4'b1011,
+								4'b1101,
+
+								4'b1101,
+								4'b1110,
+								4'b0111,
+								4'b1011,
+
+								4'b1011,
+								4'b1101,
+								4'b1110,
+								4'b0111
 							}
 
 
@@ -258,10 +265,11 @@ generate
 								CIPHER_STATE[STAGE][j*16+i] 
 									<= 	( 
 											// 	SBOX  			SR 					  	  #M'_row 	missing
-											(SBOX[KEY_WHITEN[(j*16+ 3)%64 : (j*16+ 0)%64]][i % 4] & (m_row[((j[1]^j[0])*3+MISS[i])%4][0])) 	^
-											(SBOX[KEY_WHITEN[(j*16+23)%64 : (j*16+20)%64]][i % 4] & (m_row[((j[1]^j[0])*3+MISS[i])%4][1])) 	^
-											(SBOX[KEY_WHITEN[(j*16+43)%64 : (j*16+40)%64]][i % 4] & (m_row[((j[1]^j[0])*3+MISS[i])%4][2])) 	^
-											(SBOX[KEY_WHITEN[(j*16+63)%64 : (j*16+60)%64]][i % 4] & (m_row[((j[1]^j[0])*3+MISS[i])%4][3])) 	
+											// 															     if this is M1 or M0
+											(SBOX[KEY_WHITEN[(j*16+ 3)%64 : (j*16+ 0)%64]][i % 4] & MISS[(i+(j[1]^j[0])*4)%16][0]) 	^
+											(SBOX[KEY_WHITEN[(j*16+23)%64 : (j*16+20)%64]][i % 4] & MISS[(i+(j[1]^j[0])*4)%16][1]) 	^
+											(SBOX[KEY_WHITEN[(j*16+43)%64 : (j*16+40)%64]][i % 4] & MISS[(i+(j[1]^j[0])*4)%16][2]) 	^
+											(SBOX[KEY_WHITEN[(j*16+63)%64 : (j*16+60)%64]][i % 4] & MISS[(i+(j[1]^j[0])*4)%16][3]) 	
 										) 
 										^ RC[STAGE][j*16+i] ^ K1[j*16+i];
             		end // STAGE == 0
@@ -276,10 +284,11 @@ generate
 								CIPHER_STATE[STAGE][j*16+i] 
 									<= 	( 
 											// 	SBOX  						SR 					  	 #M'_row 	missing
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+ 3)%64 : (j*16+ 0)%64]][i % 4] & (m_row[((j[1]^j[0])*3+MISS[i])%4][0])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+23)%64 : (j*16+20)%64]][i % 4] & (m_row[((j[1]^j[0])*3+MISS[i])%4][1])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+43)%64 : (j*16+40)%64]][i % 4] & (m_row[((j[1]^j[0])*3+MISS[i])%4][2])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+63)%64 : (j*16+60)%64]][i % 4] & (m_row[((j[1]^j[0])*3+MISS[i])%4][3])) 	
+											// 															                if this is M1 or M0
+											(SBOX[CIPHER_STATE[STAGE-1][(j*16+ 3)%64 : (j*16+ 0)%64]][i % 4] & MISS[(i+(j[1]^j[0])*4)%16][0]) 	^
+											(SBOX[CIPHER_STATE[STAGE-1][(j*16+23)%64 : (j*16+20)%64]][i % 4] & MISS[(i+(j[1]^j[0])*4)%16][1]) 	^
+											(SBOX[CIPHER_STATE[STAGE-1][(j*16+43)%64 : (j*16+40)%64]][i % 4] & MISS[(i+(j[1]^j[0])*4)%16][2]) 	^
+											(SBOX[CIPHER_STATE[STAGE-1][(j*16+63)%64 : (j*16+60)%64]][i % 4] & MISS[(i+(j[1]^j[0])*4)%16][3]) 	
 										)
 										^ RC[STAGE][j*16+i] ^ K1[j*16+i];
             		end // STATE < ((CIPHER_LATENCY-1) >> 1)
@@ -290,72 +299,61 @@ generate
 
 
 
-            	// -------- Middle stage -------- 
-            	// -> S -> M' -> S_inv 
-            	/*
-					// 16 SBOXes
-        			SBOX[CIPHER_STATE[STAGE-1][3： 0]],		// 0
-        			SBOX[CIPHER_STATE[STAGE-1][7： 4]],		// 1
-        			SBOX[CIPHER_STATE[STAGE-1][11：8]],		// 2
-        			SBOX[CIPHER_STATE[STAGE-1][15：12]],		// 3
-
-        			SBOX[CIPHER_STATE[STAGE-1][19：16]],		// 4
-        			SBOX[CIPHER_STATE[STAGE-1][23：20]],		// 5
-        			SBOX[CIPHER_STATE[STAGE-1][27：24]],		// 6
-        			SBOX[CIPHER_STATE[STAGE-1][31：28]],		// 7
-
-        			SBOX[CIPHER_STATE[STAGE-1][35：32]],		// 8
-					SBOX[CIPHER_STATE[STAGE-1][39：36]],		// 9
-					SBOX[CIPHER_STATE[STAGE-1][43：40]],		// A
-					SBOX[CIPHER_STATE[STAGE-1][47：44]],		// B
-
-					SBOX[CIPHER_STATE[STAGE-1][51：48]],		// C
-					SBOX[CIPHER_STATE[STAGE-1][55：52]],		// D
-					SBOX[CIPHER_STATE[STAGE-1][59：56]],		// E
-					SBOX[CIPHER_STATE[STAGE-1][63：60]],		// F
-
-					// ---------------- 1st 16 bits with M0 ----------------
-					M_out[0]  = SBOX[CIPHER_STATE[STAGE-1][7 ： 4]][0] ^ SBOX[CIPHER_STATE[STAGE-1][11：8]][0] ^ SBOX[CIPHER_STATE[STAGE-1][15：12]][0]		\\ 0 	123	0
-					M_out[1]  = SBOX[CIPHER_STATE[STAGE-1][3 ： 0]][1] ^ SBOX[CIPHER_STATE[STAGE-1][11：8]][1] ^ SBOX[CIPHER_STATE[STAGE-1][15：12]][1]		\\ 1	023	1
-					M_out[2]  = SBOX[CIPHER_STATE[STAGE-1][3 ： 0]][2] ^ SBOX[CIPHER_STATE[STAGE-1][7 ：4]][2] ^ SBOX[CIPHER_STATE[STAGE-1][15：12]][2]		\\ 2	013	2
-					M_out[3]  = SBOX[CIPHER_STATE[STAGE-1][3 ： 0]][3] ^ SBOX[CIPHER_STATE[STAGE-1][7 ：4]][3] ^ SBOX[CIPHER_STATE[STAGE-1][11： 8]][3]		\\ 3	012	3
- 
-
-
-            	*/
+            	
             	// -------- Middle stage --------
+            	// -> S -> M' -> S_inv 
+            	integer i, j;
+					for (j=0; j<16; j=j+1)
+						CIPHER_STATE[STAGE][j*4+3 : j*4]  
+							<= SBOX_INV	[
+											{
+												// 	SBOX  								   #M'_row 	          missing
+												//		SBOX 										M'		  who's missing  M1 or M0
+												// BIT 3
+											   (
+											   	(SBOX[CIPHER_STATE[STAGE-1][(j*16+ 3) : (j*16+ 0)]][3] & MISS[(j[1:0]*4+3 +(j[2]^j[3])*4)%16][0]) 	^
+												(SBOX[CIPHER_STATE[STAGE-1][(j*16+ 7) : (j*16+ 4)]][3] & MISS[(j[1:0]*4+3 +(j[2]^j[3])*4)%16][1]) 	^
+												(SBOX[CIPHER_STATE[STAGE-1][(j*16+11) : (j*16+ 8)]][3] & MISS[(j[1:0]*4+3 +(j[2]^j[3])*4)%16][2]) 	^
+												(SBOX[CIPHER_STATE[STAGE-1][(j*16+15) : (j*16+12)]][3] & MISS[(j[1:0]*4+3 +(j[2]^j[3])*4)%16][3])
+												),
+
+											   // BIT 2
+											   (
+											   	(SBOX[CIPHER_STATE[STAGE-1][(j*16+ 3) : (j*16+ 0)]][2] & MISS[(j[1:0]*4+2 +(j[2]^j[3])*4)%16][0]) 	^
+												(SBOX[CIPHER_STATE[STAGE-1][(j*16+ 7) : (j*16+ 4)]][2] & MISS[(j[1:0]*4+2 +(j[2]^j[3])*4)%16][1]) 	^
+												(SBOX[CIPHER_STATE[STAGE-1][(j*16+11) : (j*16+ 8)]][2] & MISS[(j[1:0]*4+2 +(j[2]^j[3])*4)%16][2]) 	^
+												(SBOX[CIPHER_STATE[STAGE-1][(j*16+15) : (j*16+12)]][2] & MISS[(j[1:0]*4+2 +(j[2]^j[3])*4)%16][3])
+												),
+
+											   // BIT 1
+											   (
+											   	(SBOX[CIPHER_STATE[STAGE-1][(j*16+ 3) : (j*16+ 0)]][1] & MISS[(j[1:0]*4+1 +(j[2]^j[3])*4)%16][0]) 	^
+												(SBOX[CIPHER_STATE[STAGE-1][(j*16+ 7) : (j*16+ 4)]][1] & MISS[(j[1:0]*4+1 +(j[2]^j[3])*4)%16][1]) 	^
+												(SBOX[CIPHER_STATE[STAGE-1][(j*16+11) : (j*16+ 8)]][1] & MISS[(j[1:0]*4+1 +(j[2]^j[3])*4)%16][2]) 	^
+												(SBOX[CIPHER_STATE[STAGE-1][(j*16+15) : (j*16+12)]][1] & MISS[(j[1:0]*4+1 +(j[2]^j[3])*4)%16][3])
+												),
+
+											   // BIT 0
+											   (
+											   	(SBOX[CIPHER_STATE[STAGE-1][(j*16+ 3) : (j*16+ 0)]][0] & MISS[(j[1:0]*4+0 +(j[2]^j[3])*4)%16][0]) 	^
+												(SBOX[CIPHER_STATE[STAGE-1][(j*16+ 7) : (j*16+ 4)]][0] & MISS[(j[1:0]*4+0 +(j[2]^j[3])*4)%16][1]) 	^
+												(SBOX[CIPHER_STATE[STAGE-1][(j*16+11) : (j*16+ 8)]][0] & MISS[(j[1:0]*4+0 +(j[2]^j[3])*4)%16][2]) 	^
+												(SBOX[CIPHER_STATE[STAGE-1][(j*16+15) : (j*16+12)]][0] & MISS[(j[1:0]*4+0 +(j[2]^j[3])*4)%16][3])
+												) 	
+											}
+										]
+
+
+
         		else if (STAGE == ((CIPHER_LATENCY-1) >> 1))
         		begin
 					integer i, j;
 					for (j=0; j<4; j=j+1)
 						for (i=0; i<16; i=i+4)
-							CIPHER_STATE[STAGE][j*16+i : j*16+i+3] 
+							CIPHER_STATE[STAGE][j*16+i+3 : j*16+i] 
 								<= 	SBOX_INV[ 
 										{
-											// 	SBOX  										    #M'_row 	 missing
-											// BIT 3
-										   ((SBOX[CIPHER_STATE[STAGE-1][(j*16+ 3) : (j*16+ 0)]][i+3 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+3])%4][0])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+ 7) : (j*16+ 4)]][i+3 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+3])%4][1])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+11) : (j*16+ 8)]][i+3 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+3])%4][2])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+15) : (j*16+12)]][i+3 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+3])%4][3]))) 	;
 
-										   // BIT 2
-										   ((SBOX[CIPHER_STATE[STAGE-1][(j*16+ 3) : (j*16+ 0)]][i+2 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+2])%4][0])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+ 7) : (j*16+ 4)]][i+2 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+2])%4][1])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+11) : (j*16+ 8)]][i+2 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+2])%4][2])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+15) : (j*16+12)]][i+2 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+2])%4][3]))) 	;
-
-										   // BIT 1
-										   ((SBOX[CIPHER_STATE[STAGE-1][(j*16+ 3) : (j*16+ 0)]][i+1 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+1])%4][0])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+ 7) : (j*16+ 4)]][i+1 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+1])%4][1])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+11) : (j*16+ 8)]][i+1 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+1])%4][2])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+15) : (j*16+12)]][i+1 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+1])%4][3]))) 	;
-
-										   // BIT 0
-										   ((SBOX[CIPHER_STATE[STAGE-1][(j*16+ 3) : (j*16+ 0)]][i+0 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+0])%4][0])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+ 7) : (j*16+ 4)]][i+0 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+0])%4][1])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+11) : (j*16+ 8)]][i+0 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+0])%4][2])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+15) : (j*16+12)]][i+0 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+0])%4][3]))) 	
 										}
 									];
 
@@ -365,121 +363,48 @@ generate
         		
 
         		
+        		
         		// -------- Reverse stages -------- 
-        		/*
-					----- Reverse stages -----
-					// Ri, i >= 6:     ^ RCi ^ K1 -> M_inv -> S_inv 
 
-					
-
-				    // Ori input
-        			CIPHER_STATE[STAGE-1][3： 0],		// 0
-        			CIPHER_STATE[STAGE-1][7： 4],		// 1
-        			CIPHER_STATE[STAGE-1][11：8],		// 2
-        			CIPHER_STATE[STAGE-1][15：12],		// 3
-        			CIPHER_STATE[STAGE-1][19：16],		// 4
-        			CIPHER_STATE[STAGE-1][23：20],		// 5
-        			CIPHER_STATE[STAGE-1][27：24],		// 6
-        			CIPHER_STATE[STAGE-1][31：28],		// 7
-        			CIPHER_STATE[STAGE-1][35：32],		// 8
-					CIPHER_STATE[STAGE-1][39：36],		// 9
-					CIPHER_STATE[STAGE-1][43：40],		// A
-					CIPHER_STATE[STAGE-1][47：44],		// B
-					CIPHER_STATE[STAGE-1][51：48],		// C
-					CIPHER_STATE[STAGE-1][55：52],		// D
-					CIPHER_STATE[STAGE-1][59：56],		// E
-					CIPHER_STATE[STAGE-1][63：60],		// F
-
-					SR_inv			0 1 2 3 4 5 6 7 8 9 A B C D E F 
-								 -> 0 D A 7 4 1 E B 8 5 2 F C 9 6 3
-											   	   		   	   ori  new
-					CIPHER_STATE[STAGE-1][3 ： 0],		// 0	0
-					CIPHER_STATE[STAGE-1][55：52],		// D	1
-					CIPHER_STATE[STAGE-1][43：40],		// A 	2
-					CIPHER_STATE[STAGE-1][31：28],		// 7 	3
-
-					CIPHER_STATE[STAGE-1][19：16],		// 4 	4
-					CIPHER_STATE[STAGE-1][7 ： 4],		// 1 	5
-					CIPHER_STATE[STAGE-1][59：56],		// E 	6
-					CIPHER_STATE[STAGE-1][47：44],		// B 	7
-
-					CIPHER_STATE[STAGE-1][35：32],		// 8 	8
-					CIPHER_STATE[STAGE-1][23：20],		// 5 	9
-					CIPHER_STATE[STAGE-1][11： 8],		// 2 	A
-					CIPHER_STATE[STAGE-1][63：60],		// F 	B
-
-					CIPHER_STATE[STAGE-1][51：48],		// C 	C
-					CIPHER_STATE[STAGE-1][39：36],		// 9 	D
-					CIPHER_STATE[STAGE-1][27：24],		// 6 	E
-					CIPHER_STATE[STAGE-1][15：12],		// 3 	F
-
-
-					// ---------------- 1st 16 bits with M0 ----------------
-					CIPHER_STATE[STAGE-1][52] ^ CIPHER_STATE[STAGE-1][40] ^ CIPHER_STATE[STAGE-1][28]		\\ 0 	123	0
-					CIPHER_STATE[STAGE-1][ 1] ^ CIPHER_STATE[STAGE-1][41] ^ CIPHER_STATE[STAGE-1][29]		\\ 1 	023	1
-					CIPHER_STATE[STAGE-1][ 2] ^ CIPHER_STATE[STAGE-1][42] ^ CIPHER_STATE[STAGE-1][30]		\\ 2 	013	2
-					CIPHER_STATE[STAGE-1][ 3] ^ CIPHER_STATE[STAGE-1][43] ^ CIPHER_STATE[STAGE-1][31]		\\ 3 	012	3
- 
-
-        		*/
-        		/*
-        		integer i, j;
-					for (j=0; j<4; j=j+1)
-						for (i=0; i<16; i=i+4)
-        					CIPHER_STATE[STAGE][j*16+i : j*16+i+3] 
-								<= SBOX_INV[
-										{
-											CIPHER_STATE[STAGE-1][(j*16+3) : (j*16+0)] ^ RC[STAGE][(j*16+3) : (j*16+0)] ^ K1[(j*16+3) : (j*16+0)]
-
-
-										}
-											]
-										
-
-
-
-
-								CIPHER_STATE[STAGE-1][(j*16+ 3) : (j*16+ 0)] ^ RC[STAGE][j*16+i] ^ K1[j*16+i]
-				*/
-
-
-
+        		// Ri, i >= 6:     ^ RCi ^ K1 -> M_inv -> S_inv 
         		else if (STAGE > ((CIPHER_LATENCY-1) >> 1))
-        		begin
-        			integer i, j;
-					for (j=0; j<4; j=j+1)
-						for (i=0; i<16; i=i+4)
-							CIPHER_STATE[STAGE][j*16+i : j*16+i+3] 
-								<= 	SBOX_INV[ 
-										{
-											// 	SBOX  										    #M'_row 	 missing
-											// BIT 3
-										   ((SBOX[CIPHER_STATE[STAGE-1][(j*16+ 3) : (j*16+ 0)]][i+3 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+3])%4][0])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+ 7) : (j*16+ 4)]][i+3 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+3])%4][1])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+11) : (j*16+ 8)]][i+3 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+3])%4][2])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+15) : (j*16+12)]][i+3 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+3])%4][3]))) 	;
+        		integer i, j;
+					for (j=0; j<16; j=j+1)
+						CIPHER_STATE[STAGE][j*4+3 : j*4]  
+							<= SBOX_INV	[
+											{	//		 				SR_INV										M		  								  who's missing  M1 or M0
+												(
+												((CIPHER_STATE[STAGE-1][(j[3:2]*16 + 3)%64] ^ RC[STAGE][(j[3:2]*16 + 3)%64] ^ K1[(j[3:2]*16 + 3)%64]) && MISS[(j[1:0]*4+3 +(j[2]^j[3])*4)%16][0]) ^ 
+												((CIPHER_STATE[STAGE-1][(j[3:2]*16 +55)%64] ^ RC[STAGE][(j[3:2]*16 +55)%64] ^ K1[(j[3:2]*16 +55)%64]) && MISS[(j[1:0]*4+3 +(j[2]^j[3])*4)%16][1]) ^
+												((CIPHER_STATE[STAGE-1][(j[3:2]*16 +43)%64] ^ RC[STAGE][(j[3:2]*16 +43)%64] ^ K1[(j[3:2]*16 +43)%64]) && MISS[(j[1:0]*4+3 +(j[2]^j[3])*4)%16][2]) ^ 
+												((CIPHER_STATE[STAGE-1][(j[3:2]*16 +31)%64] ^ RC[STAGE][(j[3:2]*16 +31)%64] ^ K1[(j[3:2]*16 +31)%64]) && MISS[(j[1:0]*4+3 +(j[2]^j[3])*4)%16][3]) 	 
+												),
 
-										   // BIT 2
-										   ((SBOX[CIPHER_STATE[STAGE-1][(j*16+ 3) : (j*16+ 0)]][i+2 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+2])%4][0])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+ 7) : (j*16+ 4)]][i+2 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+2])%4][1])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+11) : (j*16+ 8)]][i+2 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+2])%4][2])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+15) : (j*16+12)]][i+2 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+2])%4][3]))) 	;
+												(
+												((CIPHER_STATE[STAGE-1][(j[3:2]*16 + 2)%64] ^ RC[STAGE][(j[3:2]*16 + 2)%64] ^ K1[(j[3:2]*16 + 2)%64]) && MISS[(j[1:0]*4+2 +(j[2]^j[3])*4)%16][0]) ^ 
+												((CIPHER_STATE[STAGE-1][(j[3:2]*16 +54)%64] ^ RC[STAGE][(j[3:2]*16 +54)%64] ^ K1[(j[3:2]*16 +54)%64]) && MISS[(j[1:0]*4+2 +(j[2]^j[3])*4)%16][1]) ^
+												((CIPHER_STATE[STAGE-1][(j[3:2]*16 +42)%64] ^ RC[STAGE][(j[3:2]*16 +42)%64] ^ K1[(j[3:2]*16 +42)%64]) && MISS[(j[1:0]*4+2 +(j[2]^j[3])*4)%16][2]) ^ 
+												((CIPHER_STATE[STAGE-1][(j[3:2]*16 +30)%64] ^ RC[STAGE][(j[3:2]*16 +30)%64] ^ K1[(j[3:2]*16 +30)%64]) && MISS[(j[1:0]*4+2 +(j[2]^j[3])*4)%16][3]) 	 
+												),
 
-										   // BIT 1
-										   ((SBOX[CIPHER_STATE[STAGE-1][(j*16+ 3) : (j*16+ 0)]][i+1 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+1])%4][0])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+ 7) : (j*16+ 4)]][i+1 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+1])%4][1])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+11) : (j*16+ 8)]][i+1 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+1])%4][2])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+15) : (j*16+12)]][i+1 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+1])%4][3]))) 	;
+												(
+												((CIPHER_STATE[STAGE-1][(j[3:2]*16 + 1)%64] ^ RC[STAGE][(j[3:2]*16 + 1)%64] ^ K1[(j[3:2]*16 + 1)%64]) && MISS[(j[1:0]*4+1 +(j[2]^j[3])*4)%16][0]) ^ 
+												((CIPHER_STATE[STAGE-1][(j[3:2]*16 +53)%64] ^ RC[STAGE][(j[3:2]*16 +53)%64] ^ K1[(j[3:2]*16 +53)%64]) && MISS[(j[1:0]*4+1 +(j[2]^j[3])*4)%16][1]) ^
+												((CIPHER_STATE[STAGE-1][(j[3:2]*16 +41)%64] ^ RC[STAGE][(j[3:2]*16 +41)%64] ^ K1[(j[3:2]*16 +41)%64]) && MISS[(j[1:0]*4+1 +(j[2]^j[3])*4)%16][2]) ^ 
+												((CIPHER_STATE[STAGE-1][(j[3:2]*16 +29)%64] ^ RC[STAGE][(j[3:2]*16 +29)%64] ^ K1[(j[3:2]*16 +29)%64]) && MISS[(j[1:0]*4+1 +(j[2]^j[3])*4)%16][3]) 
+												),	 
 
-										   // BIT 0
-										   ((SBOX[CIPHER_STATE[STAGE-1][(j*16+ 3) : (j*16+ 0)]][i+0 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+0])%4][0])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+ 7) : (j*16+ 4)]][i+0 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+0])%4][1])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+11) : (j*16+ 8)]][i+0 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+0])%4][2])) 	^
-											(SBOX[CIPHER_STATE[STAGE-1][(j*16+15) : (j*16+12)]][i+0 % 4] & (m_row[((j[1]^j[0])*3+MISS[i+0])%4][3]))) 	
-										}
-									];
-										^ RC[STAGE][j*16+i] ^ K1[j*16+i];
-        		end // -------- Reverse stages -------- 
+												(
+												((CIPHER_STATE[STAGE-1][(j[3:2]*16 + 0)%64] ^ RC[STAGE][(j[3:2]*16 + 0)%64] ^ K1[(j[3:2]*16 + 0)%64]) && MISS[(j[1:0]*4+0 +(j[2]^j[3])*4)%16][0]) ^ 
+											    ((CIPHER_STATE[STAGE-1][(j[3:2]*16 +52)%64] ^ RC[STAGE][(j[3:2]*16 +52)%64] ^ K1[(j[3:2]*16 +52)%64]) && MISS[(j[1:0]*4+0 +(j[2]^j[3])*4)%16][1]) ^ 
+												((CIPHER_STATE[STAGE-1][(j[3:2]*16 +40)%64] ^ RC[STAGE][(j[3:2]*16 +40)%64] ^ K1[(j[3:2]*16 +40)%64]) && MISS[(j[1:0]*4+0 +(j[2]^j[3])*4)%16][2]) ^ 
+												((CIPHER_STATE[STAGE-1][(j[3:2]*16 +28)%64] ^ RC[STAGE][(j[3:2]*16 +28)%64] ^ K1[(j[3:2]*16 +28)%64]) && MISS[(j[1:0]*4+0 +(j[2]^j[3])*4)%16][3])
+												)
+											}
+										]
+
+ 
+				end // -------- Reverse stages -------- 	 
 			end // if PRINCE_ON
 
 
@@ -494,20 +419,13 @@ endgenerate
 
 
 
-
-
-
-
-
-
-
 // --------------------------------------------------------------
 endmodule
 
 
 
 /*
-            			--- Forward Stages ---
+--- Forward Stages ---
 
             			Ri, i <= 5:     S -> M -> ^ RCi ^ K1
 
@@ -634,3 +552,159 @@ endmodule
 						// Stage output
 						CIPHER_STATE[STAGE] <= M_out ^ RC[STAGE] ^ K1;
             		*/
+
+
+
+// -------- Middle stage -------- 
+            	// -> S -> M' -> S_inv 
+            	/*
+					// 16 SBOXes
+        			SBOX[CIPHER_STATE[STAGE-1][3： 0]],		// 0
+        			SBOX[CIPHER_STATE[STAGE-1][7： 4]],		// 1
+        			SBOX[CIPHER_STATE[STAGE-1][11：8]],		// 2
+        			SBOX[CIPHER_STATE[STAGE-1][15：12]],		// 3
+
+        			SBOX[CIPHER_STATE[STAGE-1][19：16]],		// 4
+        			SBOX[CIPHER_STATE[STAGE-1][23：20]],		// 5
+        			SBOX[CIPHER_STATE[STAGE-1][27：24]],		// 6
+        			SBOX[CIPHER_STATE[STAGE-1][31：28]],		// 7
+
+        			SBOX[CIPHER_STATE[STAGE-1][35：32]],		// 8
+					SBOX[CIPHER_STATE[STAGE-1][39：36]],		// 9
+					SBOX[CIPHER_STATE[STAGE-1][43：40]],		// A
+					SBOX[CIPHER_STATE[STAGE-1][47：44]],		// B
+
+					SBOX[CIPHER_STATE[STAGE-1][51：48]],		// C
+					SBOX[CIPHER_STATE[STAGE-1][55：52]],		// D
+					SBOX[CIPHER_STATE[STAGE-1][59：56]],		// E
+					SBOX[CIPHER_STATE[STAGE-1][63：60]],		// F
+
+					// ---------------- 1st 16 bits with M0 ----------------
+					M_out[0]  = SBOX[CIPHER_STATE[STAGE-1][7 ： 4]][0] ^ SBOX[CIPHER_STATE[STAGE-1][11：8]][0] ^ SBOX[CIPHER_STATE[STAGE-1][15：12]][0]		\\ 0 	123	0
+					M_out[1]  = SBOX[CIPHER_STATE[STAGE-1][3 ： 0]][1] ^ SBOX[CIPHER_STATE[STAGE-1][11：8]][1] ^ SBOX[CIPHER_STATE[STAGE-1][15：12]][1]		\\ 1	023	1
+					M_out[2]  = SBOX[CIPHER_STATE[STAGE-1][3 ： 0]][2] ^ SBOX[CIPHER_STATE[STAGE-1][7 ：4]][2] ^ SBOX[CIPHER_STATE[STAGE-1][15：12]][2]		\\ 2	013	2
+					M_out[3]  = SBOX[CIPHER_STATE[STAGE-1][3 ： 0]][3] ^ SBOX[CIPHER_STATE[STAGE-1][7 ：4]][3] ^ SBOX[CIPHER_STATE[STAGE-1][11： 8]][3]		\\ 3	012	3
+ 
+
+
+            	*/
+
+
+
+// -------- Reverse stages -------- 
+        		/*
+					----- Reverse stages -----
+					// Ri, i >= 6:     ^ RCi ^ K1 -> M_inv -> S_inv 
+
+					
+
+				    // Ori input: ^ k1 ^ RCi
+        			CIPHER_STATE[STAGE-1][3 ： 0] ^ RC[STAGE][3 ： 0] ^ K1[3 ： 0],		// 0
+        			CIPHER_STATE[STAGE-1][7 ： 4] ^ RC[STAGE][7 ： 4] ^ K1[7 ： 4],		// 1
+        			CIPHER_STATE[STAGE-1][11： 8] ^ RC[STAGE][11： 8] ^ K1[11： 8],		// 2
+        			CIPHER_STATE[STAGE-1][15：12] ^ RC[STAGE][15：12] ^ K1[15：12],		// 3
+        			CIPHER_STATE[STAGE-1][19：16] ^ RC[STAGE][19：16] ^ K1[19：16],		// 4
+        			CIPHER_STATE[STAGE-1][23：20] ^ RC[STAGE][23：20] ^ K1[23：20],		// 5
+        			CIPHER_STATE[STAGE-1][27：24] ^ RC[STAGE][27：24] ^ K1[27：24],		// 6
+        			CIPHER_STATE[STAGE-1][31：28] ^ RC[STAGE][31：28] ^ K1[31：28],		// 7
+        			CIPHER_STATE[STAGE-1][35：32] ^ RC[STAGE][35：32] ^ K1[35：32],		// 8
+					CIPHER_STATE[STAGE-1][39：36] ^ RC[STAGE][39：36] ^ K1[39：36],		// 9
+					CIPHER_STATE[STAGE-1][43：40] ^ RC[STAGE][43：40] ^ K1[43：40],		// A
+					CIPHER_STATE[STAGE-1][47：44] ^ RC[STAGE][47：44] ^ K1[47：44],		// B
+					CIPHER_STATE[STAGE-1][51：48] ^ RC[STAGE][51：48] ^ K1[51：48],		// C
+					CIPHER_STATE[STAGE-1][55：52] ^ RC[STAGE][55：52] ^ K1[55：52],		// D
+					CIPHER_STATE[STAGE-1][59：56] ^ RC[STAGE][59：56] ^ K1[59：56],		// E
+					CIPHER_STATE[STAGE-1][63：60] ^ RC[STAGE][63：60] ^ K1[63：60],		// F
+
+					SR_inv			0 1 2 3 4 5 6 7 8 9 A B C D E F 
+								 -> 0 D A 7 4 1 E B 8 5 2 F C 9 6 3
+											   	   		   	   							   ori  new
+					CIPHER_STATE[STAGE-1][3 ： 0] ^ RC[STAGE][3 ： 0] ^ K1[3 ： 0],		// 0	0
+					CIPHER_STATE[STAGE-1][55：52] ^ RC[STAGE][55：52] ^ K1[55：52],		// D	1
+					CIPHER_STATE[STAGE-1][43：40] ^ RC[STAGE][43：40] ^ K1[43：40],		// A 	2
+					CIPHER_STATE[STAGE-1][31：28] ^ RC[STAGE][31：28] ^ K1[31：28],		// 7 	3
+
+					CIPHER_STATE[STAGE-1][19：16] ^ RC[STAGE][19：16] ^ K1[19：16],		// 4 	4
+					CIPHER_STATE[STAGE-1][7 ： 4] ^ RC[STAGE][7 ： 4] ^ K1[7 ： 4],		// 1 	5
+					CIPHER_STATE[STAGE-1][59：56] ^ RC[STAGE][59：56] ^ K1[59：56],		// E 	6
+					CIPHER_STATE[STAGE-1][47：44] ^ RC[STAGE][47：44] ^ K1[47：44],		// B 	7
+
+					CIPHER_STATE[STAGE-1][35：32] ^ RC[STAGE][35：32] ^ K1[35：32],		// 8 	8
+					CIPHER_STATE[STAGE-1][23：20] ^ RC[STAGE][23：20] ^ K1[23：20],		// 5 	9
+					CIPHER_STATE[STAGE-1][11： 8] ^ RC[STAGE][11： 8] ^ K1[11： 8],		// 2 	A
+					CIPHER_STATE[STAGE-1][63：60] ^ RC[STAGE][63：60] ^ K1[63：60],		// F 	B
+
+					CIPHER_STATE[STAGE-1][51：48] ^ RC[STAGE][51：48] ^ K1[51：48],		// C 	C
+					CIPHER_STATE[STAGE-1][39：36] ^ RC[STAGE][39：36] ^ K1[39：36],		// 9 	D
+					CIPHER_STATE[STAGE-1][27：24] ^ RC[STAGE][27：24] ^ K1[27：24],		// 6 	E
+					CIPHER_STATE[STAGE-1][15：12] ^ RC[STAGE][15：12] ^ K1[15：12],		// 3 	F
+
+
+					// ---------------- 1st 16 bits with M0 ----------------
+																			#bit 		missing
+					CIPHER_STATE[STAGE-1][52] ^ RC[STAGE][52] ^ K1[52] ^ 
+					CIPHER_STATE[STAGE-1][40] ^ RC[STAGE][40] ^ K1[40] ^ 
+					CIPHER_STATE[STAGE-1][28] ^ RC[STAGE][28] ^ K1[28]		\\ 0 	123	0
+
+					CIPHER_STATE[STAGE-1][ 1] ^ RC[STAGE][ 1] ^ K1[ 1] ^ 
+					CIPHER_STATE[STAGE-1][41] ^ RC[STAGE][41] ^ K1[41] ^ 
+					CIPHER_STATE[STAGE-1][29] ^ RC[STAGE][29] ^ K1[29]		\\ 1 	023	1
+					
+					CIPHER_STATE[STAGE-1][ 2] ^ RC[STAGE][ 2] ^ K1[ 2] ^ 
+					CIPHER_STATE[STAGE-1][42] ^ RC[STAGE][42] ^ K1[42] ^ 
+					CIPHER_STATE[STAGE-1][30] ^ RC[STAGE][30] ^ K1[30] 		\\ 2 	013	2
+					
+					CIPHER_STATE[STAGE-1][ 3] ^ RC[STAGE][ 3] ^ K1[ 3] ^ 
+					CIPHER_STATE[STAGE-1][43] ^ RC[STAGE][43] ^ K1[43] ^ 
+					CIPHER_STATE[STAGE-1][31] ^ RC[STAGE][31] ^ K1[31] 		\\ 3 	012	3
+
+
+					---
+
+					CIPHER_STATE[STAGE-1][ 0] ^ RC[STAGE][ 0] ^ K1[ 0] ^ 
+					CIPHER_STATE[STAGE-1][52] ^ RC[STAGE][52] ^ K1[52] ^ 
+					CIPHER_STATE[STAGE-1][40] ^ RC[STAGE][40] ^ K1[40] 		\\ 4 	012	3
+
+					CIPHER_STATE[STAGE-1][53] ^ RC[STAGE][53] ^ K1[53] ^ 
+					CIPHER_STATE[STAGE-1][41] ^ RC[STAGE][41] ^ K1[41] ^ 
+					CIPHER_STATE[STAGE-1][29] ^ RC[STAGE][29] ^ K1[29] 		\\ 5 	123	0
+
+ 
+					// ---------------- SBOX_INV ----------------
+					SBOX_INV[
+								{
+									CIPHER_STATE[STAGE-1][52] ^ RC[STAGE][52] ^ K1[52] ^ 
+									CIPHER_STATE[STAGE-1][40] ^ RC[STAGE][40] ^ K1[40] ^ 
+									CIPHER_STATE[STAGE-1][28] ^ RC[STAGE][28] ^ K1[28] ,	\\ 0 	123	0
+
+									CIPHER_STATE[STAGE-1][ 1] ^ RC[STAGE][ 1] ^ K1[ 1] ^ 
+									CIPHER_STATE[STAGE-1][41] ^ RC[STAGE][41] ^ K1[41] ^ 
+									CIPHER_STATE[STAGE-1][29] ^ RC[STAGE][29] ^ K1[29] ,	\\ 1 	023	1
+
+									CIPHER_STATE[STAGE-1][ 2] ^ RC[STAGE][ 2] ^ K1[ 2] ^ 
+									CIPHER_STATE[STAGE-1][42] ^ RC[STAGE][42] ^ K1[42] ^ 
+									CIPHER_STATE[STAGE-1][30] ^ RC[STAGE][30] ^ K1[30] ,	\\ 2 	013	2
+
+									CIPHER_STATE[STAGE-1][ 3] ^ RC[STAGE][ 3] ^ K1[ 3] ^ 
+									CIPHER_STATE[STAGE-1][43] ^ RC[STAGE][43] ^ K1[43] ^ 
+									CIPHER_STATE[STAGE-1][31] ^ RC[STAGE][31] ^ K1[31] 		\\ 3 	012	3
+								}
+							]
+
+					SBOX_INV[
+								{
+									CIPHER_STATE[STAGE-1][ 0] ^ RC[STAGE][ 0] ^ K1[ 0] ^ 
+									CIPHER_STATE[STAGE-1][52] ^ RC[STAGE][52] ^ K1[52] ^ 
+									CIPHER_STATE[STAGE-1][40] ^ RC[STAGE][40] ^ K1[40] ,	\\ 4 	012	3
+
+									CIPHER_STATE[STAGE-1][53] ^ RC[STAGE][53] ^ K1[53] ^ 
+									CIPHER_STATE[STAGE-1][41] ^ RC[STAGE][41] ^ K1[41] ^ 
+									CIPHER_STATE[STAGE-1][29] ^ RC[STAGE][29] ^ K1[29] ,	\\ 5 	123	0
+
+
+
+								}			
+							]
+
+
+        		*/
